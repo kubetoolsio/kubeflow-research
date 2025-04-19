@@ -63,85 +63,83 @@ While Kafka handles the core asynchronous flow, **Redis** can be employed for sp
 
 **2.3 Core Architectural Flow Diagram**
 
-Code snippet
+```mermaid
+graph LR
 
-graph LR  
-    subgraph User/External Systems  
-        A  
-        B  
-        C  
-    end
+  subgraph User/External Systems
+    A[WebRTC Client]
+    B[SIP Trunk Provider]
+    C[Inbound Call Flow]
+  end
 
-    subgraph Livekit Platform  
-        D  
-        E\[Livekit Core (Distributed Nodes)\]  
-        F\[Livekit Agent/Worker Pool\]  
-        G  
-    end
+  subgraph Livekit Platform
+    D[Livekit SIP Server]
+    E[Livekit Core Distributed Nodes]
+    F[Livekit Agent Worker Pool]
+    G[Room Signaling]
+  end
 
-    subgraph Backend Microservices  
-        H  
-        I  
-        J  
-        K  
-        L  
-        M  
-        N  
-    end
+  subgraph Backend Microservices
+    H[Call Orchestration Service]
+    I[STT Service]
+    J[LLM Service]
+    K[TTS Service]
+    L[Tenant Management]
+    M[Session Manager]
+    N[Redis Cache and Config]
+  end
 
-    subgraph Messaging & Analytics  
-        O  
-        P\[Analytics & Monitoring Platform\]  
-    end
+  subgraph Messaging & Analytics
+    O[Kafka Messaging Bus]
+    P[Analytics and Monitoring Platform]
+  end
 
-    A \--\> C \--\> D;  
-    B \--\> E;  
-    D \--\> E;  
-    E \--\> F;  
-    F \--\> E;  
-    E \--\> G;  
-    E \--\> H;  
-    H \--\> E;  
-    F \--\> I;  
-    F \--\> K;
+  A --> C --> D
+  B --> E
+  D --> E
+  E --> F
+  F --> E
+  E --> G
+  E --> H
+  H --> E
+  F --> I
+  F --> K
 
-    H \-- Request Call Handling \--\> O;  
-    I \-- Transcription Result \--\> O;  
-    J \-- LLM Response \--\> O;  
-    K \-- TTS Audio Ready \--\> O;
+  H -- Request Call Handling --> O
+  I -- Transcription Result --> O
+  J -- LLM Response --> O
+  K -- TTS Audio Ready --> O
 
-    J \-- Consume \--\> O;  
-    K \-- Consume \--\> O;  
-    H \-- Consume \--\> O;  
-    P \-- Consume \--\> O;  
-    P \-- Consume \--\> O;  
-    P \-- Consume \--\> O;  
-    P \-- Consume \--\> O;
+  J -- Consume --> O
+  K -- Consume --> O
+  H -- Consume --> O
+  P -- Consume --> O
 
-    I \--\> P\[Log Metrics/Errors\];  
-    J \--\> P\[Log Metrics/Errors\];  
-    K \--\> P\[Log Metrics/Errors\];  
-    H \--\> P\[Log Metrics/Errors\];  
-    E \--\> P\[Log Metrics/Errors\];
+  I --> P
+  J --> P
+  K --> P
+  H --> P
+  E --> P
 
-    J \--\> OpenAI\[OpenAI API\];  
-    I \-- Deepgram API/Self-Hosted \--\> DG\_STT;  
-    K \-- Deepgram API/Self-Hosted \--\> DG\_TTS;
+  J --> OpenAI[OpenAI API]
+  I --> DG_STT[Deepgram STT API or Self-Hosted]
+  K --> DG_TTS[Deepgram TTS API or Self-Hosted]
 
-    H \--\> L;  
-    L \--\> M;  
-    H \--\> M;  
-    J \--\> N;  
-    L \--\> N\[Cache/Config\];  
-    H \--\> N;
+  H --> L
+  L --> M
+  H --> M
+  J --> N
+  L --> N
+  H --> N
 
-    F \-- Interaction \--\> I;  
-    F \-- Interaction \--\> J;  
-    F \-- Interaction \--\> K;
+  F -- Interaction --> I
+  F -- Interaction --> J
+  F -- Interaction --> K
 
-    style OpenAI fill:\#f9d,stroke:\#333,stroke-width:2px  
-    style DG\_STT fill:\#ccf,stroke:\#333,stroke-width:2px  
-    style DG\_TTS fill:\#ccf,stroke:\#333,stroke-width:2px
+  style OpenAI fill:#f9d,stroke:#333,stroke-width:2px
+  style DG_STT fill:#ccf,stroke:#333,stroke-width:2px
+  style DG_TTS fill:#ccf,stroke:#333,stroke-width:2px
+```
 
 *Diagram Description:* SIP and WebRTC clients connect via the SIP Trunking Provider and directly to the distributed Livekit Core, respectively. The Livekit SIP Server handles SIP signaling. Livekit Core, coordinated by Redis, manages rooms and participants, distributing load across nodes and interacting with a pool of Livekit Agents/Workers. These agents orchestrate the AI pipeline, interacting with dedicated microservices for STT, LLM, and TTS. Communication between backend microservices (including Call Orchestration and Tenant Management) primarily occurs asynchronously via Apache Kafka topics. Services publish events (e.g., transcription results, LLM responses), and other services subscribe to consume these events. Redis serves as a cache for configuration/state and potentially short-term conversation context. A central Database stores persistent multi-tenant data. An Analytics Platform consumes events from Kafka and logs from services for monitoring and analysis. External API calls are made to OpenAI and potentially Deepgram (if not self-hosted).
 
@@ -486,28 +484,9 @@ Incorporate security throughout the development lifecycle: secure coding practic
 
 **Multi-Layered Security:** Security in this complex system requires a defense-in-depth approach. A vulnerability in one layer (e.g., weak tenant isolation in the database query logic) could compromise the entire platform. Therefore, security must be addressed at the network level, infrastructure level, application code level, data level, and identity/access management level.82 Achieving compliance like HIPAA often strongly favors self-hosting STT/TTS to maintain direct control over sensitive data processing, potentially outweighing the increased operational cost and complexity.8
 
-## **9\. Implementation Roadmap**
 
-This high-level roadmap outlines key phases for building the described voice AI backend platform. Timelines are estimates and depend on team size, expertise, and specific complexities encountered.
 
-* **Phase 1: Foundation & Core Setup (Estimated Weeks 1-4)**  
-  * **Tasks:** Provision cloud infrastructure (VPC, subnets, security groups), set up a Kubernetes cluster (e.g., EKS, GKE, AKS), deploy managed Redis 19 and Kafka 15 (or self-host initial instances), establish basic CI/CD pipelines, set up centralized logging/monitoring foundations (e.g., ELK, Prometheus/Grafana) 9, deploy Livekit Core in a distributed configuration using Redis 2, scaffold initial microservice projects (e.g., using Spring Boot, Python/FastAPI, Go).  
-  * **Goal:** Establish the core infrastructure and basic service structure.  
-* **Phase 2: Service Integration & Basic Pipeline (Estimated Weeks 5-10)**  
-  * **Tasks:** Integrate Livekit SIP server for basic inbound/outbound call functionality 3, integrate Deepgram STT Cloud API publishing results to Kafka, integrate OpenAI LLM API (consuming STT results, handling streaming 6 and rate limits 66, publishing results), integrate Deepgram Aura-2 Cloud API (consuming LLM results, streaming audio back), develop initial Livekit Agent logic to connect these components via Kafka 22, implement basic state passing via Kafka messages.  
-  * **Goal:** Achieve a functional end-to-end voice pipeline using cloud APIs, validating the core interaction flow. This iterative approach allows early testing and feedback before tackling full multi-tenancy or self-hosting complexities.  
-* **Phase 3: Multi-Tenancy Implementation (Estimated Weeks 11-16)**  
-  * **Tasks:** Design and implement the chosen database tenancy model (e.g., shared schema with Tenant ID) and DAL 82, integrate a multi-tenant capable IdP (e.g., Auth0) for user authentication and tenant association 84, implement tenant context propagation (via Kafka headers, JWT claims) across all services 85, modify services to load and use tenant-specific configurations, implement RBAC based on JWT claims.  
-  * **Goal:** Enable multiple tenants to use the platform with proper data and configuration isolation.  
-* **Phase 4: Self-Hosting & Optimization (Estimated Weeks 17-22)**  
-  * **Tasks:** *If self-hosting STT/TTS is pursued:* Finalize Deepgram Enterprise agreement, procure/configure GPU instances 5, obtain and deploy Deepgram model files and containers using Kubernetes 79, switch service integrations from cloud APIs to self-hosted endpoints. Refine Kubernetes HPA configurations for all services based on load testing. Optimize pipeline latency (e.g., tune VAD parameters 22, buffer sizes 95, LLM prompts). Implement more sophisticated state management using Redis if required.19  
-  * **Goal:** Enhance performance, gain data control, and potentially optimize costs at scale by bringing key AI components in-house. The decision to proceed with self-hosting should be validated based on data gathered in Phases 2 & 3 regarding actual costs, performance, and tenant requirements.  
-* **Phase 5: Analytics, Security Hardening & Launch Prep (Estimated Weeks 23-28)**  
-  * **Tasks:** Implement comprehensive KPI tracking and build analytics dashboards (Section 7\) 11, conduct thorough security reviews, vulnerability scanning, and penetration testing, finalize compliance documentation (e.g., for HIPAA, GDPR), perform extensive load testing to validate concurrency and scalability under realistic conditions, finalize production deployment pipelines and disaster recovery plans.9  
-  * **Goal:** Ensure the platform is robust, secure, observable, and ready for production launch.  
-* **Ongoing:** Post-launch activities involve continuous monitoring of performance, cost, and user experience; ongoing optimization of AI models, prompts, and system configurations; regular security patching and updates; and iterative development of new features based on analytics and customer feedback.
-
-## **10\. Conclusions and Recommendations**
+## **9\. Conclusions and Recommendations**
 
 Building a high-concurrency, multi-tenant voice AI backend for a SaaS platform is a complex undertaking, requiring careful architectural choices and technology selection. The proposed microservices architecture, leveraging event-driven communication via Kafka and integrating best-of-breed components like Livekit, Deepgram, and OpenAI, provides a robust foundation for achieving the required scalability, performance, and resilience.
 
